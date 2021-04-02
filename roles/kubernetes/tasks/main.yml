@@ -1,0 +1,115 @@
+--- 
+- 
+  name: "Closing firewalld"
+  systemd: 
+    enabled: false
+    name: firewalld
+    state: stopped
+
+- name: Ensure br_netfilter is enabled.
+  modprobe:
+    name: br_netfilter
+    state: present
+
+- name: "Disable swap"
+  ansible.builtin.shell: 
+    cmd: "swapoff -a"
+  
+- name: "Disable swapoff permanently"
+  replace: 
+    backup: true
+    path: /etc/fstab
+    regexp: '^(\s*)([^#\n]+\s+)(\w+\s+)swap(\s+.*)$'
+    replace: '#\1\2\3swap\4'
+
+- name: "Disable SELinux"
+  selinux: 
+    state: disabled
+
+- name: "Update sysctl settings for Kubernetes net.bridge.bridge-nf-call-ip6tables"
+  sysctl: 
+    name: net.bridge.bridge-nf-call-ip6tables
+    reload: yes
+    sysctl_file: /etc/sysctl.d/kubernetes.conf
+    value: '1'
+
+- name: "Update sysctl settings for Kubernetes net.bridge.bridge-nf-call-iptables"
+  sysctl: 
+    name: net.bridge.bridge-nf-call-iptables
+    reload: yes
+    sysctl_file: /etc/sysctl.d/kubernetes.conf
+    value: '1'
+
+- name: "Add Docker repository."
+  template: 
+    dest: /etc/yum.repos.d/docker-ce.repo
+    mode: 0644
+    src: docker-ce.repo.j2
+
+- name: "Uninstall Docker"
+  package: 
+    name: "{{ item }}"
+    state: absent
+  when: "ansible_distribution == os_type"
+  with_items: 
+    - docker
+    - docker-client
+    - docker-client-latest
+    - docker-common
+    - docker-latest
+    - docker-latest-logrotate
+    - docker-logrotate
+    - docker-engine
+
+- name: "Uninstall kubeadm, kubelet, kubectl"
+  package:
+    name: "{{ item }}"
+    state: absent
+  when: "ansible_distribution == os_type"
+  with_items:
+    - kubeadm-1.19.2-0
+    - kubelet-1.19.2-0
+    - kubectl-1.19.2-0
+
+- name: "upgrade all packages"
+  yum: "name=* state=latest"  
+  
+- name: "Install Docker"
+  package:
+    name: "{{ item }}"
+    state: present
+  when: "ansible_distribution == os_type"
+  with_items:
+    - yum-utils
+    - docker-ce-19.03.12
+    - docker-ce-cli-19.03.12
+    - containerd.io
+
+- name: "Start Docker"
+  systemd:
+    name: docker
+    state: started
+
+- name: Add kubernetes repo
+  template:
+    src: kubernetes.repo.j2
+    dest: /etc/yum.repos.d/kubernetes.repo
+    mode: 0644
+
+- name: "Install kubeadm, kubelet, kubectl"
+  package:
+    name: "{{ item }}"
+    state: present
+  when: "ansible_distribution == os_type"
+  with_items:
+    - kubeadm-1.19.2-0
+    - kubelet-1.19.2-0
+    - kubectl-1.19.2-0
+
+- name: "Reset kubeadm"
+  shell: yes | kubeadm reset
+  when: (inventory_hostname == '192.168.206.31')
+
+- name: "Init kubeadmin on master-1"
+  script: init_kubeadm.sh
+  when: (inventory_hostname == '192.168.206.31')

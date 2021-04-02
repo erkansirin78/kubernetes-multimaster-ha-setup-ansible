@@ -1,0 +1,8 @@
+---
+# defaults file for roles/kubernetes
+os_type: "CentOS"
+
+haproxy_server: 192.168.206.36
+master_1_ip: 192.168.206.31
+master_2_ip: 192.168.206.32
+haproxy_port: 6443

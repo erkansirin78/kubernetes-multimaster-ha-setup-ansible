@@ -1,0 +1,26 @@
+---
+# tasks file for roles/haproxy# Closing and disabling firewalld
+- name: Closing firewalld
+  systemd:
+    name: firewalld
+    state: stopped
+    enabled: no
+
+- name: upgrade all packages
+  yum: name=* state=latest
+
+- name: Install haproxy
+  package: 
+    name: haproxy
+  when: "ansible_distribution == os_type"
+
+- name: Configure haproxy
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: 0644
+
+- name: Restart haproxy service
+  systemd:
+    name: haproxy
+    state: restarted

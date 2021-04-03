@@ -1,12 +1,11 @@
 --- 
-- 
-  name: "Closing firewalld"
+- name: "Closing firewalld"
   systemd: 
     enabled: false
     name: firewalld
     state: stopped
 
-- name: Ensure br_netfilter is enabled.
+- name: "Ensure br_netfilter is enabled."
   modprobe:
     name: br_netfilter
     state: present
@@ -47,69 +46,72 @@
     src: docker-ce.repo.j2
 
 - name: "Uninstall Docker"
-  package: 
-    name: "{{ item }}"
+  yum: 
     state: absent
-  when: "ansible_distribution == os_type"
-  with_items: 
-    - docker
-    - docker-client
-    - docker-client-latest
-    - docker-common
-    - docker-latest
-    - docker-latest-logrotate
-    - docker-logrotate
-    - docker-engine
+    name:
+      - docker
+      - docker-client
+      - docker-client-latest
+      - docker-common
+      - docker-latest
+      - docker-latest-logrotate
+      - docker-logrotate
+      - docker-engine
 
 - name: "Uninstall kubeadm, kubelet, kubectl"
-  package:
-    name: "{{ item }}"
+  yum:
     state: absent
-  when: "ansible_distribution == os_type"
-  with_items:
-    - kubeadm-1.19.2-0
-    - kubelet-1.19.2-0
-    - kubectl-1.19.2-0
+    name:
+      - kubeadm-1.19.2-0
+      - kubelet-1.19.2-0
+      - kubectl-1.19.2-0
 
 - name: "upgrade all packages"
   yum: "name=* state=latest"  
   
 - name: "Install Docker"
-  package:
-    name: "{{ item }}"
+  yum:
     state: present
-  when: "ansible_distribution == os_type"
-  with_items:
-    - yum-utils
-    - docker-ce-19.03.12
-    - docker-ce-cli-19.03.12
-    - containerd.io
+    name:
+      - yum-utils
+      - docker-ce-19.03.12
+      - docker-ce-cli-19.03.12
+      - containerd.io
 
 - name: "Start Docker"
   systemd:
     name: docker
     state: started
+    enabled: yes
 
-- name: Add kubernetes repo
+- name: "Add kubernetes repo"
   template:
     src: kubernetes.repo.j2
     dest: /etc/yum.repos.d/kubernetes.repo
     mode: 0644
 
 - name: "Install kubeadm, kubelet, kubectl"
-  package:
-    name: "{{ item }}"
+  yum:
     state: present
-  when: "ansible_distribution == os_type"
-  with_items:
-    - kubeadm-1.19.2-0
-    - kubelet-1.19.2-0
-    - kubectl-1.19.2-0
+    name:
+      - kubeadm-1.19.2-0
+      - kubelet-1.19.2-0
+      - kubectl-1.19.2-0
+
+- name: "Start and enable kubelet"
+  systemd:
+    name: kubelet
+    state: started
+    enabled: yes
 
 - name: "Reset kubeadm"
-  shell: yes | kubeadm reset
+  shell: kubeadm reset -f
   when: (inventory_hostname == '192.168.206.31')
 
 - name: "Init kubeadmin on master-1"
-  script: init_kubeadm.sh
+  script: init_kubeadm.sh > /tmp/kubeadm_init_output.txt
+  when: (inventory_hostname == '192.168.206.31')
+
+- name: "Run calio network on master-1"
+  script: calico.sh > /tmp/calico_output.txt
   when: (inventory_hostname == '192.168.206.31')
